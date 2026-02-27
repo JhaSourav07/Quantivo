@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  /* Our custom color palette */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+
+  /* Our custom shadow */
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+
+  /* Our custom animation */
+  --animate-fade-in: fadeIn 0.3s ease-out;
+}
+
+/* Define the keyframes for our custom animation */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body {
+  /* Use standard CSS variables for standard CSS rules */
+  background-color: var(--color-background);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
