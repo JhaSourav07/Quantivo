@@ -200,10 +200,9 @@ const forgotPassword = async (req, res) => {
     const normEmail = email.toLowerCase().trim();
     const user      = await User.findOne({ email: normEmail });
 
-    // Respond 200 even if user not found — prevents email enumeration
     if (!user) {
-      return res.status(200).json({
-        message: 'If that email is registered, a password reset link has been sent.',
+      return res.status(404).json({
+        message: 'No account found with that email address. Please register first.',
       });
     }
 

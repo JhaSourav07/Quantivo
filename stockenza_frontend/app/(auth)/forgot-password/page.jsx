@@ -28,8 +28,9 @@ function MagneticInput({ label, type = 'text', value, onChange, placeholder, req
 
 export default function ForgotPasswordPage() {
   const [email,   setEmail]   = useState('');
-  const [status,  setStatus]  = useState('idle'); // idle | loading | success | error
-  const [message, setMessage] = useState('');
+  const [status,     setStatus]     = useState('idle'); // idle | loading | success | error
+  const [message,    setMessage]    = useState('');
+  const [notFound,   setNotFound]   = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setTimeout(() => setMounted(true), 60); }, []);
@@ -38,12 +39,15 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setStatus('loading');
     setMessage('');
+    setNotFound(false);
     try {
       const { data } = await api.post('/auth/forgot-password', { email });
       setStatus('success');
       setMessage(data.message);
     } catch (err) {
       setStatus('error');
+      const isNotFound = err.response?.status === 404;
+      setNotFound(isNotFound);
       setMessage(err.response?.data?.message || 'Something went wrong. Please try again.');
     }
   };
@@ -100,7 +104,15 @@ export default function ForgotPasswordPage() {
           {/* Error state */}
           {status === 'error' && (
             <div style={{ marginBottom: 18, padding: '12px 16px', borderRadius: 12, background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)', color: '#fca5a5', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <span style={{ flexShrink: 0 }}>⚠</span>{message}
+              <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+              <span>
+                {message}
+                {notFound && (
+                  <Link href="/register" style={{ display: 'block', marginTop: 6, color: '#818cf8', fontSize: 12, textDecoration: 'underline' }}>
+                    Create an account →
+                  </Link>
+                )}
+              </span>
             </div>
           )}
 
