@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '../../../lib/api';
 
@@ -90,7 +89,6 @@ const PERKS = [
 ];
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [name, setName]           = useState('');
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
@@ -104,13 +102,11 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault(); setLoading(true); setError('');
     try {
-      const { data } = await api.post('/auth/register', { name, email, password });
-      localStorage.setItem('stockenza_token', data.token);
-      localStorage.setItem('stockenza_user', JSON.stringify(data));
-      setStep(1);
-      setTimeout(() => router.push('/dashboard'), 900);
+      await api.post('/auth/register', { name, email, password });
+      setStep(1); // show "check your email" banner — do NOT redirect
     } catch (err) {
       setError(err.response?.data?.message || 'Could not create account.');
+    } finally {
       setLoading(false);
     }
   };
@@ -226,9 +222,12 @@ export default function RegisterPage() {
 
             {/* Success */}
             {step === 1 && (
-              <div style={{ marginBottom:16, padding:'16px', borderRadius:12, background:'rgba(52,211,153,0.08)', border:'1px solid rgba(52,211,153,0.25)', color:'#6ee7b7', fontSize:13, display:'flex', alignItems:'center', gap:12, animation:'successPop 0.45s cubic-bezier(0.34,1.56,0.64,1) both' }}>
-                <span style={{ fontSize:20, animation:'successPop 0.4s 0.1s both' }}>🎉</span>
-                Account created! Taking you to dashboard…
+              <div style={{ marginBottom:16, padding:'16px', borderRadius:12, background:'rgba(52,211,153,0.08)', border:'1px solid rgba(52,211,153,0.25)', color:'#6ee7b7', fontSize:13, display:'flex', alignItems:'flex-start', gap:12, animation:'successPop 0.45s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                <span style={{ fontSize:20, flexShrink:0 }}>✉️</span>
+                <span>
+                  <strong style={{ display:'block', marginBottom:3 }}>Registration successful!</strong>
+                  Please check your email to verify your account before logging in.
+                </span>
               </div>
             )}
 
@@ -249,7 +248,7 @@ export default function RegisterPage() {
                     {loading ? (
                       <><span style={{ width:16, height:16, borderRadius:'50%', border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'white', display:'inline-block', animation:'spin 0.7s linear infinite' }} />Creating account…</>
                     ) : step === 1 ? (
-                      <>✓ Account Created!</>
+                      <>✓ Check Your Email</>
                     ) : (
                       <>Get Started Free <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></>
                     )}

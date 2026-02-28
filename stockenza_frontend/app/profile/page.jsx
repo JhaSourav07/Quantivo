@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '../../components/layout/AppLayout';
 import { useCurrency } from '../../context/CurrencyContext';
+import api from '../../lib/api';
 
 // Import newly separated components
 import ProfileSidebar from '../../app/profile/ProfileSidebar';
@@ -26,8 +27,9 @@ export default function ProfilePage() {
   // State
   const [user, setUser] = useState(null);
   const [saved, setSaved] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [currencySaved, setCurrencySaved] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '' });
+  const [form, setForm] = useState({ name: '', email: '', currentPassword: '', newPassword: '' });
   const [activeSection, setActiveSection] = useState('Account');
   const [pendingCode, setPendingCode] = useState(currency.code);
 
@@ -41,19 +43,37 @@ export default function ProfilePage() {
       if (stored) {
         const u = JSON.parse(stored);
         setUser(u);
-        setForm({ name: u.name || '', email: u.email || '' });
+        setForm({ name: u.name || '', email: u.email || '', currentPassword: '', newPassword: '' });
       }
     } catch {}
   }, []);
 
   // Handlers
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    const updated = { ...user, ...form };
-    localStorage.setItem('stockenza_user', JSON.stringify(updated));
-    setUser(updated);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setProfileError('');
+    try {
+      const token = localStorage.getItem('stockenza_token');
+      const payload = { name: form.name };
+      if (form.currentPassword || form.newPassword) {
+        payload.currentPassword = form.currentPassword;
+        payload.newPassword     = form.newPassword;
+      }
+      const { data } = await api.put('/auth/profile', payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // Sync localStorage with updated name
+      const stored = JSON.parse(localStorage.getItem('stockenza_user') || '{}');
+      const updated = { ...stored, name: data.name };
+      localStorage.setItem('stockenza_user', JSON.stringify(updated));
+      setUser(updated);
+      // Clear password fields
+      setForm(f => ({ ...f, currentPassword: '', newPassword: '' }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setProfileError(err.response?.data?.message || 'Could not update profile.');
+    }
   };
 
   const handleCurrencySave = () => {
@@ -97,7 +117,8 @@ export default function ProfilePage() {
                 form={form} 
                 setForm={setForm} 
                 onSave={handleSave} 
-                saved={saved} 
+                saved={saved}
+                error={profileError}
               />
               <CurrencyPreference 
                 currency={currency}

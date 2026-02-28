@@ -112,20 +112,28 @@ export default function LoginPage() {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
+  const [isUnverified, setIsUnverified] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [mounted, setMounted]   = useState(false);
 
   useEffect(() => { setTimeout(() => setMounted(true), 60); }, []);
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setLoading(true); setError('');
+    e.preventDefault(); setLoading(true); setError(''); setIsUnverified(false);
     try {
       const { data } = await api.post('/auth/login', { email, password });
       localStorage.setItem('stockenza_token', data.token);
       localStorage.setItem('stockenza_user', JSON.stringify(data));
       router.push('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid credentials.');
+      const status  = err.response?.status;
+      const message = err.response?.data?.message || 'Invalid credentials.';
+      if (status === 403) {
+        setIsUnverified(true);
+        setError(message);
+      } else {
+        setError(message);
+      }
       setLoading(false);
     }
   };
@@ -211,9 +219,19 @@ export default function LoginPage() {
               <p style={{ fontFamily:'DM Mono,monospace', color:'rgba(255,255,255,0.22)', fontSize:11, letterSpacing:'0.03em', margin:0 }}>Sign in to your workspace →</p>
             </div>
 
-            {error && (
+            {error && !isUnverified && (
               <div style={{ animation:'shake 0.35s ease', marginBottom:18, padding:'12px 16px', borderRadius:12, background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.22)', color:'#fca5a5', fontSize:13, display:'flex', alignItems:'flex-start', gap:10 }}>
                 <span style={{ marginTop:1, flexShrink:0 }}>⚠</span>{error}
+              </div>
+            )}
+
+            {isUnverified && (
+              <div style={{ marginBottom:18, padding:'14px 16px', borderRadius:12, background:'rgba(251,191,36,0.07)', border:'1px solid rgba(251,191,36,0.25)', color:'#fde68a', fontSize:13, display:'flex', alignItems:'flex-start', gap:10 }}>
+                <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>✉️</span>
+                <span>
+                  <strong style={{ display:'block', marginBottom:3, color:'#fbbf24' }}>Email not verified</strong>
+                  {error}
+                </span>
               </div>
             )}
 
@@ -241,6 +259,23 @@ export default function LoginPage() {
               </div>
             </form>
 
+            {/* Forgot password + resend verification helper links */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14, flexWrap:'wrap', gap:8 }}>
+              <Link href="/forgot-password"
+                style={{ fontFamily:'DM Mono,monospace', fontSize:10, color:'rgba(255,255,255,0.25)', textDecoration:'none', letterSpacing:'0.06em', transition:'color 0.2s' }}
+                onMouseEnter={e=>{ e.currentTarget.style.color='#818cf8'; }}
+                onMouseLeave={e=>{ e.currentTarget.style.color='rgba(255,255,255,0.25)'; }}
+              >
+                Forgot Password?
+              </Link>
+              <Link href="/resend-verification"
+                style={{ fontFamily:'DM Mono,monospace', fontSize:10, color:'rgba(255,255,255,0.25)', textDecoration:'none', letterSpacing:'0.06em', transition:'color 0.2s', textAlign:'right' }}
+                onMouseEnter={e=>{ e.currentTarget.style.color='#818cf8'; }}
+                onMouseLeave={e=>{ e.currentTarget.style.color='rgba(255,255,255,0.25)'; }}
+              >
+                Resend verification email
+              </Link>
+            </div>
             <div style={{ display:'flex', alignItems:'center', gap:16, margin:'24px 0' }}>
               <div style={{ flex:1, height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.055))' }} />
               <span style={{ fontFamily:'DM Mono,monospace', color:'rgba(255,255,255,0.15)', fontSize:9, letterSpacing:'0.2em' }}>OR</span>
