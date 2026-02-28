@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const NAV_ITEMS = [
   {
@@ -42,10 +42,11 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Sidebar() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const [user, setUser] = useState(null);
+// ── The actual sidebar panel (shared between desktop & mobile) ──
+function SidebarPanel({ onClose, isMobile = false }) {
+  const pathname    = usePathname();
+  const router      = useRouter();
+  const [user,      setUser]      = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -69,11 +70,11 @@ export default function Sidebar() {
     : 'U';
 
   return (
-    <aside className="w-64 bg-zinc-950 border-r border-zinc-800/80 h-screen fixed left-0 top-0 flex flex-col z-40">
-      {/* ── Logo ── */}
-      <div className="h-16 flex items-center px-6 border-b border-zinc-800/80 shrink-0">
+    <div className="flex flex-col h-full bg-zinc-950 border-r border-zinc-800/80">
+
+      {/* ── Logo + mobile close button ── */}
+      <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-800/80 shrink-0">
         <div className="flex items-center gap-2.5">
-          {/* Logo mark */}
           <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shadow-[0_0_12px_rgba(99,102,241,0.5)]">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -83,6 +84,19 @@ export default function Sidebar() {
             Stock<span className="text-indigo-400">enza</span>
           </span>
         </div>
+
+        {/* Close button — only visible in mobile drawer */}
+        {isMobile && (
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all"
+            aria-label="Close menu"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* ── Navigation ── */}
@@ -111,7 +125,6 @@ export default function Sidebar() {
               </span>
               {item.name}
 
-              {/* Active dot */}
               {isActive && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.8)]" />
               )}
@@ -131,7 +144,6 @@ export default function Sidebar() {
       {/* ── User card ── */}
       <div className="px-3 pb-4 border-t border-zinc-800/80 pt-3 shrink-0">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800/60 transition-colors group">
-          {/* Avatar */}
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.4)]">
             {initials}
           </div>
@@ -143,7 +155,6 @@ export default function Sidebar() {
             <p className="text-xs text-zinc-600 truncate">{user?.email || ''}</p>
           </div>
 
-          {/* Logout button */}
           <button
             onClick={handleLogout}
             disabled={loggingOut}
@@ -156,6 +167,69 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+export default function Sidebar({ isOpen, onClose }) {
+  // Track whether the panel has ever been opened so we don't animate on first
+  // render before the user has touched anything
+  const hasOpened = useRef(false);
+  if (isOpen) hasOpened.current = true;
+
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <>
+      {/*
+        ══════════════════════════════════════════
+        DESKTOP — static fixed sidebar (lg and up)
+        Always visible, never animated
+        ══════════════════════════════════════════
+      */}
+      <aside className="hidden lg:flex flex-col w-64 fixed left-0 top-0 h-screen z-40">
+        <SidebarPanel isMobile={false} onClose={onClose} />
+      </aside>
+
+      {/*
+        ══════════════════════════════════════════
+        MOBILE — slide-in drawer (below lg)
+        Controlled by isOpen prop from AppLayout
+        ══════════════════════════════════════════
+      */}
+
+      {/* Backdrop — fades in/out */}
+      <div
+        className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+        style={{
+          opacity:        isOpen ? 1 : 0,
+          pointerEvents:  isOpen ? 'auto' : 'none',
+        }}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Drawer panel — slides in from left */}
+      <aside
+        className="lg:hidden fixed left-0 top-0 h-full w-72 max-w-[85vw] z-50 shadow-[4px_0_40px_rgba(0,0,0,0.6)]"
+        style={{
+          transform:  isOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+          // Only apply will-change when the drawer has been used to avoid
+          // promoting the element on initial render
+          willChange: hasOpened.current ? 'transform' : 'auto',
+        }}
+        aria-label="Navigation menu"
+        aria-modal="true"
+        role="dialog"
+      >
+        <SidebarPanel isMobile={true} onClose={onClose} />
+      </aside>
+    </>
   );
 }

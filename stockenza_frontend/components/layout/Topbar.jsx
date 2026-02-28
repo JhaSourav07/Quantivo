@@ -3,17 +3,18 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 const PAGE_META = {
-  '/dashboard': { title: 'Dashboard',  subtitle: 'Business overview & analytics' },
-  '/inventory':  { title: 'Inventory',  subtitle: 'Manage your products & stock'  },
-  '/orders':     { title: 'Orders',     subtitle: 'Sales history & new transactions' },
-  '/profile':    { title: 'Profile',    subtitle: 'Account settings & preferences' },
+  '/dashboard': { title: 'Dashboard',  subtitle: 'Business overview & analytics'      },
+  '/inventory':  { title: 'Inventory',  subtitle: 'Manage your products & stock'       },
+  '/orders':     { title: 'Orders',     subtitle: 'Sales history & new transactions'   },
+  '/profile':    { title: 'Profile',    subtitle: 'Account settings & preferences'     },
 };
 
-export default function Topbar() {
+// onMenuClick — passed down from AppLayout; toggles the mobile sidebar drawer
+export default function Topbar({ onMenuClick }) {
   const pathname = usePathname();
-  const [user, setUser]   = useState(null);
-  const [time, setTime]   = useState('');
-  const [notifs, setNotifs] = useState(3); // demo badge
+  const [user,   setUser]   = useState(null);
+  const [time,   setTime]   = useState('');
+  const [notifs, setNotifs] = useState(3);
 
   useEffect(() => {
     try {
@@ -21,7 +22,6 @@ export default function Topbar() {
       if (stored) setUser(JSON.parse(stored));
     } catch {}
 
-    // Live clock
     const tick = () => {
       setTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
     };
@@ -36,22 +36,46 @@ export default function Topbar() {
     : 'U';
 
   return (
-    <header className="h-16 fixed top-0 right-0 left-64 z-30 flex items-center justify-between px-8 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80">
-      {/* ── Left: Page title ── */}
+    <header
+      className={[
+        'h-16 fixed top-0 right-0 z-30',
+        'flex items-center justify-between px-4 sm:px-6 lg:px-8',
+        'bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80',
+        // On mobile: full width. On desktop: offset by sidebar.
+        'left-0 lg:left-64',
+      ].join(' ')}
+    >
+      {/* ── Left: hamburger (mobile) + page title ── */}
       <div className="flex items-center gap-3">
+
+        {/*
+          Hamburger — only visible on mobile (hidden on lg+)
+          Calls onMenuClick which flips sidebarOpen in AppLayout
+        */}
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-all shrink-0"
+          aria-label="Open navigation menu"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {/* Page title */}
         <div>
           <h1 className="text-sm font-semibold text-zinc-100 leading-none">{meta.title}</h1>
-          <p className="text-xs text-zinc-600 mt-0.5">{meta.subtitle}</p>
+          <p className="text-xs text-zinc-600 mt-0.5 hidden sm:block">{meta.subtitle}</p>
         </div>
       </div>
 
-      {/* ── Right: Actions ── */}
-      <div className="flex items-center gap-2">
-        {/* Clock */}
-        <span className="hidden sm:block text-xs font-mono text-zinc-600 mr-2">{time}</span>
+      {/* ── Right: actions ── */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Live clock — hidden on small screens */}
+        <span className="hidden md:block text-xs font-mono text-zinc-600 mr-1">{time}</span>
 
         {/* Search */}
-        <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/50 border border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600 transition-all text-xs">
+        <button className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-zinc-800/50 border border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 hover:border-zinc-600 transition-all text-xs">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -73,10 +97,10 @@ export default function Topbar() {
         </button>
 
         {/* Divider */}
-        <div className="w-px h-5 bg-zinc-800 mx-1" />
+        <div className="w-px h-5 bg-zinc-800 mx-0.5" />
 
         {/* Avatar */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white shadow-[0_0_8px_rgba(99,102,241,0.35)]">
             {initials}
           </div>

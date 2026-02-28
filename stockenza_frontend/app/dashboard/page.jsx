@@ -1,255 +1,267 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../../lib/api';
 import AppLayout from '../../components/layout/AppLayout';
-import ProfitChart from '../../components/charts/ProfitChart';
-import Badge from '../../components/ui/Badge';
+import { useCurrency } from '../../context/CurrencyContext';
 
-/* ── Animated counter hook ── */
-function useCountUp(target, duration = 1000, enabled = true) {
+// ── Animated count-up hook ────────────────────────────────────────────────────
+function useCountUp(target, duration = 1200, started = true) {
   const [value, setValue] = useState(0);
+  const raf              = useRef(null);
+
   useEffect(() => {
-    if (!enabled || !target) return;
-    let start = null;
-    const step = (ts) => {
-      if (!start) start = ts;
-      const progress = Math.min((ts - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.floor(ease * target));
-      if (progress < 1) requestAnimationFrame(step);
+    if (!started || target === 0) { setValue(target); return; }
+    const start = performance.now();
+    const tick  = (now) => {
+      const t = Math.min((now - start) / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(target * eased);
+      if (t < 1) raf.current = requestAnimationFrame(tick);
       else setValue(target);
     };
-    requestAnimationFrame(step);
-  }, [target, duration, enabled]);
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [target, duration, started]);
+
   return value;
 }
 
-/* ── Stat card with count-up ── */
-function MetricCard({ title, value, prefix = '$', icon, accentColor, trend, trendLabel, loaded }) {
-  const animated = useCountUp(value, 900, loaded);
-
-  const colors = {
-    indigo:  { border: 'border-indigo-500/15',  iconBg: 'bg-indigo-500/10 text-indigo-400',  bar: 'bg-indigo-500' },
-    emerald: { border: 'border-emerald-500/15', iconBg: 'bg-emerald-500/10 text-emerald-400', bar: 'bg-emerald-500' },
-    violet:  { border: 'border-violet-500/15',  iconBg: 'bg-violet-500/10 text-violet-400',   bar: 'bg-violet-500' },
-    amber:   { border: 'border-amber-500/15',   iconBg: 'bg-amber-500/10 text-amber-400',     bar: 'bg-amber-500'  },
-  };
-  const c = colors[accentColor] || colors.indigo;
-
+// ── Custom chart tooltip ───────────────────────────────────────────────────────
+function CustomTooltip({ active, payload, label, fmt }) {
+  if (!active || !payload?.length) return null;
   return (
-    <div className={`bg-zinc-900 border ${c.border} rounded-xl p-5 transition-all duration-200 hover:-translate-y-1 hover:border-zinc-700 group`}>
-      <div className="flex items-start justify-between mb-4">
-        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{title}</p>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${c.iconBg}`}>
+    <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 shadow-xl">
+      <p className="text-xs text-zinc-500 mb-2">{label}</p>
+      {payload.map((p) => (
+        <div key={p.dataKey} className="flex items-center gap-2 text-sm">
+          <span className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-zinc-400 capitalize">{p.dataKey}:</span>
+          <span className="font-semibold text-zinc-100">{fmt(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Skeleton ───────────────────────────────────────────────────────────────────
+function Skeleton({ className = '' }) {
+  return <div className={`rounded-lg bg-zinc-800 animate-pulse ${className}`} />;
+}
+
+// ── Metric card ────────────────────────────────────────────────────────────────
+function MetricCard({ label, value, sub, color, icon, delay = 0, loaded }) {
+  return (
+    <div
+      className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-3"
+      style={{ animation: `fadeIn 0.5s ${delay}ms cubic-bezier(0.16,1,0.3,1) both` }}
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-zinc-600 uppercase tracking-wider font-medium">{label}</p>
+        <div className={`w-8 h-8 rounded-lg ${color} bg-opacity-10 flex items-center justify-center`}>
           {icon}
         </div>
       </div>
-
-      <p className="text-2xl font-bold text-zinc-100 tracking-tight tabular-nums">
-        {prefix}{loaded ? animated.toLocaleString() : '—'}
-      </p>
-
-      {trend !== undefined && (
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className={`text-xs font-medium ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
-          </span>
-          {trendLabel && <span className="text-xs text-zinc-600">{trendLabel}</span>}
-        </div>
+      {loaded ? (
+        <p className={`text-2xl font-bold tracking-tight ${color}`}>{value}</p>
+      ) : (
+        <Skeleton className="h-8 w-32" />
+      )}
+      {sub && (
+        <p className="text-xs text-zinc-600">{sub}</p>
       )}
     </div>
   );
 }
 
-/* ── Skeleton loader ── */
-function Skeleton({ className = '' }) {
-  return <div className={`rounded-lg bg-zinc-800 animate-pulse ${className}`} />;
-}
-
-/* ── Empty state ── */
-function EmptyState({ message }) {
-  return (
-    <tr>
-      <td colSpan={4} className="py-16 text-center">
-        <div className="flex flex-col items-center gap-2 text-zinc-600">
-          <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-          </svg>
-          <p className="text-sm">{message}</p>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const [summary,    setSummary]    = useState({ totalRevenue: 0, totalProfit: 0, inventoryValue: 0 });
-  const [chartData,  setChartData]  = useState([]);
-  const [productPnL, setProductPnL] = useState([]);
-  const [loaded,     setLoaded]     = useState(false);
-  const [error,      setError]      = useState('');
+  const { fmt, isMounted } = useCurrency();
 
-  useEffect(() => { fetchDashboard(); }, []);
+  const [inventory, setInventory] = useState([]);
+  const [orders,    setOrders]    = useState([]);
+  const [loaded,    setLoaded]    = useState(false);
 
-  const fetchDashboard = async () => {
-    try {
-      const [summaryRes, chartRes, inventoryRes, ordersRes] = await Promise.all([
-        api.get('/reports/summary'),
-        api.get('/reports/chart'),
-        api.get('/inventory'),
-        api.get('/orders'),
-      ]);
+  useEffect(() => {
+    const fetchAll = async () => {
+      try {
+        const [invRes, ordRes] = await Promise.all([
+          api.get('/inventory'),
+          api.get('/orders'),
+        ]);
+        setInventory(invRes.data);
+        setOrders(ordRes.data);
+      } catch (e) { console.error(e); }
+      finally     { setLoaded(true); }
+    };
+    fetchAll();
+  }, []);
 
-      setSummary(summaryRes.data);
-      setChartData(chartRes.data);
+  // ── Derived metrics ────────────────────────────────────────────────────────
+  const totalRevenue  = orders.reduce((s, o) => s + o.totalAmount, 0);
+  const totalCost     = orders.reduce((s, o) => {
+    return s + o.items.reduce((si, item) => {
+      const product = inventory.find((i) => i._id === (item.productId?._id || item.productId));
+      return si + (product ? product.costPrice * item.qty : 0);
+    }, 0);
+  }, 0);
+  const totalProfit   = totalRevenue - totalCost;
+  const stockValue    = inventory.reduce((s, i) => s + i.costPrice  * i.quantity, 0);
+  const lowStockItems = inventory.filter((i) => i.quantity > 0 && i.quantity <= 5);
+  const outOfStock    = inventory.filter((i) => i.quantity === 0);
 
-      // ── Product P&L ──
-      const inventory = inventoryRes.data;
-      const orders    = ordersRes.data;
+  // ── Chart data — revenue + profit grouped by month ─────────────────────────
+  const chartData = (() => {
+    const map = {};
+    orders.forEach((order) => {
+      const key   = new Date(order.createdAt).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+      const cost  = order.items.reduce((s, item) => {
+        const product = inventory.find((i) => i._id === (item.productId?._id || item.productId));
+        return s + (product ? product.costPrice * item.qty : 0);
+      }, 0);
+      if (!map[key]) map[key] = { month: key, revenue: 0, profit: 0 };
+      map[key].revenue += order.totalAmount;
+      map[key].profit  += order.totalAmount - cost;
+    });
+    // Last 6 months, oldest first
+    return Object.values(map).slice(-6);
+  })();
 
-      const pnl = inventory.map((item) => {
-        let unitsSold = 0, revenue = 0, cost = 0;
-        orders.forEach((order) => {
-          order.items.forEach((oi) => {
-            if (oi.productId && oi.productId._id === item._id) {
-              unitsSold += oi.qty;
-              revenue   += oi.qty * oi.productId.sellingPrice;
-              cost      += oi.qty * oi.productId.costPrice;
-            }
-          });
-        });
-        return { id: item._id, name: item.name, unitsSold, revenue, profit: revenue - cost };
-      });
+  // ── P&L per product ────────────────────────────────────────────────────────
+  const pnlRows = inventory.map((item) => {
+    const itemOrders = orders.filter((o) =>
+      o.items.some((i) => (i.productId?._id || i.productId) === item._id)
+    );
+    const unitsSold = itemOrders.reduce((s, o) =>
+      s + o.items.filter((i) => (i.productId?._id || i.productId) === item._id)
+              .reduce((si, i) => si + i.qty, 0), 0);
+    const revenue = unitsSold * item.sellingPrice;
+    const cost    = unitsSold * item.costPrice;
+    const profit  = revenue - cost;
+    const margin  = revenue > 0 ? (profit / revenue) * 100 : 0;
+    return { ...item, unitsSold, revenue, cost, profit, margin };
+  }).sort((a, b) => b.revenue - a.revenue);
 
-      pnl.sort((a, b) => b.revenue - a.revenue);
-      setProductPnL(pnl);
-    } catch (err) {
-      setError('Failed to load dashboard data.');
-      console.error(err);
-    } finally {
-      setLoaded(true);
-    }
-  };
-
-  const METRICS = [
-    {
-      title: 'Total Revenue',
-      value: summary.totalRevenue,
-      accentColor: 'indigo',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    },
-    {
-      title: 'Net Profit',
-      value: summary.totalProfit,
-      accentColor: 'emerald',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>,
-    },
-    {
-      title: 'Inventory Value',
-      value: summary.inventoryValue,
-      accentColor: 'violet',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
-    },
-    {
-      title: 'Products Tracked',
-      value: productPnL.length,
-      prefix: '',
-      accentColor: 'amber',
-      icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>,
-    },
-  ];
+  // Animated totals
+  const animRevenue = useCountUp(totalRevenue, 1200, loaded);
+  const animProfit  = useCountUp(totalProfit,  1200, loaded);
+  const animStock   = useCountUp(stockValue,   1200, loaded);
 
   return (
     <AppLayout>
-      {/* ── Page header ── */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Business Overview</h1>
-          <p className="text-sm text-zinc-600 mt-0.5">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
+          <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Dashboard</h1>
+          <p className="text-sm text-zinc-600 mt-0.5">Business overview & analytics</p>
         </div>
-        <button
-          onClick={fetchDashboard}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 text-xs font-medium transition-all"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh
-        </button>
+        {/* Currency badge — shows active currency in the top right */}
+        {isMounted && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-500">
+            <span>Showing in</span>
+            <span className="font-semibold text-zinc-300">{fmt(0).replace(/[\d,.\s]/g, '').trim() || '…'}</span>
+          </div>
+        )}
       </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <div className="mb-6 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* ── Metric cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        {!loaded
-          ? Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-28" />)
-          : METRICS.map((m, i) => (
-              <div
-                key={m.title}
-                style={{ animation: `fadeIn 0.4s ${i * 80}ms both` }}
-              >
-                <MetricCard {...m} loaded={loaded} />
-              </div>
-            ))}
+      {/* ── KPI cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <MetricCard
+          label="Total revenue"
+          value={isMounted ? fmt(animRevenue) : '—'}
+          sub={`${orders.length} orders total`}
+          color="text-indigo-400"
+          delay={0}
+          loaded={loaded && isMounted}
+          icon={<svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+        />
+        <MetricCard
+          label="Net profit"
+          value={isMounted ? fmt(animProfit) : '—'}
+          sub={totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}% margin` : 'No sales yet'}
+          color={totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}
+          delay={80}
+          loaded={loaded && isMounted}
+          icon={<svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
+        />
+        <MetricCard
+          label="Stock value"
+          value={isMounted ? fmt(animStock) : '—'}
+          sub={`${inventory.length} products tracked`}
+          color="text-violet-400"
+          delay={160}
+          loaded={loaded && isMounted}
+          icon={<svg className="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
+        />
+        <MetricCard
+          label="Alerts"
+          value={`${lowStockItems.length + outOfStock.length}`}
+          sub={`${outOfStock.length} out of stock · ${lowStockItems.length} low`}
+          color={outOfStock.length > 0 ? 'text-red-400' : lowStockItems.length > 0 ? 'text-amber-400' : 'text-emerald-400'}
+          delay={240}
+          loaded={loaded}
+          icon={<svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
+        />
       </div>
 
-      {/* ── Chart ── */}
-      <div
-        className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6"
-        style={{ animation: 'fadeIn 0.5s 0.3s both' }}
-      >
-        <div className="flex items-center justify-between mb-6">
+      {/* ── Revenue / Profit chart ── */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-200">Revenue & Profit Trend</h2>
-            <p className="text-xs text-zinc-600 mt-0.5">Daily breakdown across all orders</p>
+            <h2 className="text-sm font-semibold text-zinc-200">Revenue & Profit</h2>
+            <p className="text-xs text-zinc-600 mt-0.5">Monthly performance breakdown</p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-600">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />Revenue
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Profit
-            </span>
+          <div className="flex items-center gap-4 text-xs text-zinc-500">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />Revenue</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Profit</span>
           </div>
         </div>
-        {!loaded
-          ? <Skeleton className="h-72" />
-          : <ProfitChart data={chartData} />
-        }
+
+        {!loaded ? (
+          <Skeleton className="h-52 w-full" />
+        ) : chartData.length === 0 ? (
+          <div className="h-52 flex items-center justify-center text-zinc-600 text-sm">
+            No orders yet — make your first sale to see trends
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}   />
+                </linearGradient>
+                <linearGradient id="gradProfit" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}   />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <XAxis dataKey="month" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v)} width={70} />
+              <Tooltip content={<CustomTooltip fmt={fmt} />} />
+              <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={2} fill="url(#gradRevenue)" dot={false} />
+              <Area type="monotone" dataKey="profit"  stroke="#10b981" strokeWidth={2} fill="url(#gradProfit)"  dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
-      {/* ── P&L Table ── */}
-      <div
-        className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden"
-        style={{ animation: 'fadeIn 0.5s 0.45s both' }}
-      >
-        {/* Table header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-200">Profit & Loss by Product</h2>
-            <p className="text-xs text-zinc-600 mt-0.5">Performance breakdown per inventory item</p>
-          </div>
-          {productPnL.length > 0 && (
-            <Badge variant="primary">{productPnL.length} products</Badge>
-          )}
+      {/* ── P&L table ── */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-zinc-800">
+          <h2 className="text-sm font-semibold text-zinc-200">Profit & Loss by Product</h2>
+          <p className="text-xs text-zinc-600 mt-0.5">Revenue, cost, and margin per SKU</p>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-zinc-800/60">
-                {['Product', 'Units Sold', 'Revenue', 'Net Profit / Loss'].map((h, i) => (
+                {['Product', 'Units Sold', 'Revenue', 'Cost', 'Profit', 'Margin'].map((h, i) => (
                   <th
                     key={h}
-                    className={`px-6 py-3 text-xs font-medium text-zinc-600 uppercase tracking-wider ${i === 0 ? 'text-left' : i === 3 ? 'text-right' : 'text-center'}`}
+                    className={`px-5 py-3 text-xs font-medium text-zinc-600 uppercase tracking-wider ${i === 0 ? 'text-left' : 'text-right'}`}
                   >
                     {h}
                   </th>
@@ -258,87 +270,70 @@ export default function DashboardPage() {
             </thead>
             <tbody className="divide-y divide-zinc-800/40">
               {!loaded ? (
-                Array(3).fill(0).map((_, i) => (
+                Array(4).fill(0).map((_, i) => (
                   <tr key={i}>
-                    {Array(4).fill(0).map((_, j) => (
-                      <td key={j} className="px-6 py-4">
-                        <Skeleton className="h-4 w-full" />
-                      </td>
+                    {Array(6).fill(0).map((_, j) => (
+                      <td key={j} className="px-5 py-4"><Skeleton className="h-4" /></td>
                     ))}
                   </tr>
                 ))
-              ) : productPnL.length === 0 ? (
-                <EmptyState message="No sales yet — make your first order to see P&L data" />
+              ) : pnlRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-sm text-zinc-600">
+                    No inventory yet — add products to see your P&amp;L
+                  </td>
+                </tr>
               ) : (
-                productPnL.map((item, i) => (
+                pnlRows.map((row, i) => (
                   <tr
-                    key={item.id}
-                    className="hover:bg-zinc-800/30 transition-colors group"
-                    style={{ animation: `fadeIn 0.3s ${i * 60}ms both` }}
+                    key={row._id}
+                    className="hover:bg-zinc-800/30 transition-colors"
+                    style={{ animation: `fadeIn 0.3s ${i * 40}ms both` }}
                   >
-                    {/* Product name */}
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-500 group-hover:bg-zinc-700 transition-colors">
-                          {item.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-sm font-medium text-zinc-200">{item.name}</span>
+                    <td className="px-5 py-4">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-200">{row.name}</p>
+                        <p className="text-xs text-zinc-600">{row.quantity} in stock</p>
                       </div>
                     </td>
-
-                    {/* Units sold */}
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm text-zinc-400 tabular-nums">{item.unitsSold}</span>
+                    <td className="px-5 py-4 text-right text-sm text-zinc-400">{row.unitsSold}</td>
+                    <td className="px-5 py-4 text-right text-sm text-zinc-300 tabular-nums">{isMounted ? fmt(row.revenue) : '—'}</td>
+                    <td className="px-5 py-4 text-right text-sm text-zinc-500 tabular-nums">{isMounted ? fmt(row.cost) : '—'}</td>
+                    <td className={`px-5 py-4 text-right text-sm font-semibold tabular-nums ${row.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {isMounted ? (row.profit >= 0 ? '+' : '') + fmt(row.profit) : '—'}
                     </td>
-
-                    {/* Revenue */}
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm text-zinc-300 tabular-nums font-medium">
-                        ${item.revenue.toLocaleString()}
-                      </span>
-                    </td>
-
-                    {/* Profit badge */}
-                    <td className="px-6 py-4 text-right">
-                      <span
-                        className={[
-                          'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold',
-                          item.profit >= 0
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-red-500/10 text-red-400 border border-red-500/20',
-                        ].join(' ')}
-                      >
-                        {item.profit >= 0 ? '↑' : '↓'}
-                        ${Math.abs(item.profit).toLocaleString()}
+                    <td className="px-5 py-4 text-right">
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        row.margin >= 30 ? 'bg-emerald-500/10 text-emerald-400' :
+                        row.margin >= 10 ? 'bg-amber-500/10 text-amber-400' :
+                                           'bg-red-500/10 text-red-400'
+                      }`}>
+                        {row.margin.toFixed(1)}%
                       </span>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
+
+            {loaded && pnlRows.length > 0 && (
+              <tfoot>
+                <tr className="border-t border-zinc-700 bg-zinc-800/30">
+                  <td className="px-5 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Totals</td>
+                  <td className="px-5 py-3 text-right text-xs text-zinc-400">{pnlRows.reduce((s, r) => s + r.unitsSold, 0)}</td>
+                  <td className="px-5 py-3 text-right text-xs font-semibold text-zinc-300 tabular-nums">{isMounted ? fmt(totalRevenue) : '—'}</td>
+                  <td className="px-5 py-3 text-right text-xs text-zinc-500 tabular-nums">{isMounted ? fmt(totalCost) : '—'}</td>
+                  <td className={`px-5 py-3 text-right text-xs font-bold tabular-nums ${totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {isMounted ? (totalProfit >= 0 ? '+' : '') + fmt(totalProfit) : '—'}
+                  </td>
+                  <td className="px-5 py-3 text-right text-xs text-zinc-500">
+                    {totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}%` : '—'}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
-
-        {/* Table footer summary */}
-        {loaded && productPnL.length > 0 && (
-          <div className="px-6 py-3 border-t border-zinc-800/60 bg-zinc-900/50 flex items-center justify-between">
-            <span className="text-xs text-zinc-600">
-              Total across {productPnL.length} product{productPnL.length !== 1 ? 's' : ''}
-            </span>
-            <div className="flex items-center gap-6 text-xs">
-              <span className="text-zinc-500">
-                Revenue: <span className="text-zinc-300 font-semibold tabular-nums">
-                  ${productPnL.reduce((s, p) => s + p.revenue, 0).toLocaleString()}
-                </span>
-              </span>
-              <span className="text-zinc-500">
-                Profit: <span className={`font-semibold tabular-nums ${productPnL.reduce((s,p)=>s+p.profit,0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  ${productPnL.reduce((s, p) => s + p.profit, 0).toLocaleString()}
-                </span>
-              </span>
-            </div>
-          </div>
-        )}
       </div>
     </AppLayout>
   );

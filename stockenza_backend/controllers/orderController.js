@@ -1,23 +1,19 @@
 const Order     = require('../models/Order');
 const Inventory = require('../models/Inventory');
 
-/**
- * POST /api/orders
- * Creates an order after validating:
- *  - each productId exists and belongs to the user
- *  - sufficient stock is available
- * Then atomically decrements stock.
- */
+
 const createOrder = async (req, res) => {
   try {
-    const { items, totalAmount } = req.body;
+    const { items } = req.body;
 
     // ── Pre-flight: validate every line item ──
     const enriched = [];
 
     for (const item of items) {
       if (!item.productId || !item.qty || item.qty <= 0) {
-        return res.status(400).json({ message: 'Each order item needs a valid productId and qty.' });
+        return res.status(400).json({
+          message: 'Each order item needs a valid productId and qty.',
+        });
       }
 
       const product = await Inventory.findById(item.productId);
@@ -28,10 +24,12 @@ const createOrder = async (req, res) => {
 
       // Ownership — user can only sell their own products
       if (product.createdBy.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: `Not authorised to sell product: ${product.name}` });
+        return res.status(403).json({
+          message: `Not authorised to sell product: ${product.name}`,
+        });
       }
 
-      // Stock check
+      // Stock check (optimistic — the atomic update below is the true guard)
       if (product.quantity < item.qty) {
         return res.status(400).json({
           message: `Insufficient stock for "${product.name}". Available: ${product.quantity}, requested: ${item.qty}.`,
@@ -41,23 +39,51 @@ const createOrder = async (req, res) => {
       enriched.push({ product, qty: item.qty, productId: item.productId });
     }
 
-    // ── Create the order ──
-    const order = await Order.create({
-      items:       items.map(({ productId, qty }) => ({ productId, qty })),
-      totalAmount: parseFloat(totalAmount),
-      createdBy:   req.user._id,
-    });
+    // ── Calculate totalAmount server-side ──
+    // Never trust the client-supplied value — compute it from current selling prices
+    const totalAmount = enriched.reduce(
+      (sum, { product, qty }) => sum + product.sellingPrice * qty,
+      0
+    );
 
     // ── Atomically decrement stock for each product ──
-    await Promise.all(
+    // Using a conditional update ($gte) means if two requests race, only one
+    // will succeed in decrementing — the other will get null back and we abort.
+    const decrements = await Promise.all(
       enriched.map(({ productId, qty }) =>
-        Inventory.findByIdAndUpdate(
-          productId,
+        Inventory.findOneAndUpdate(
+          { _id: productId, quantity: { $gte: qty } }, // condition prevents oversell
           { $inc: { quantity: -qty } },
           { new: true }
         )
       )
     );
+
+    // If any decrement returned null, another request consumed the stock
+    const failedIndex = decrements.findIndex((result) => result === null);
+    if (failedIndex !== -1) {
+      // Roll back any decrements that already succeeded
+      await Promise.all(
+        decrements.map((result, i) => {
+          if (result !== null) {
+            return Inventory.findByIdAndUpdate(enriched[i].productId, {
+              $inc: { quantity: enriched[i].qty },
+            });
+          }
+        })
+      );
+
+      return res.status(400).json({
+        message: `Insufficient stock for "${enriched[failedIndex].product.name}" — it was just purchased by someone else.`,
+      });
+    }
+
+    // ── Create the order with the server-calculated total ──
+    const order = await Order.create({
+      items:       items.map(({ productId, qty }) => ({ productId, qty })),
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      createdBy:   req.user._id,
+    });
 
     return res.status(201).json(order);
   } catch (err) {
@@ -73,7 +99,7 @@ const createOrder = async (req, res) => {
 const getOrders = async (req, res) => {
   try {
     const orders = await Order
-      .find({ createdBy: req.user._id })   // ← scoped to current user
+      .find({ createdBy: req.user._id })
       .sort({ createdAt: -1 })
       .populate('items.productId', 'name costPrice sellingPrice');
 
