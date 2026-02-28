@@ -105,8 +105,8 @@ export default function RegisterPage() {
     e.preventDefault(); setLoading(true); setError('');
     try {
       const { data } = await api.post('/auth/register', { name, email, password });
-      localStorage.setItem('quantivo_token', data.token);
-      localStorage.setItem('quantivo_user', JSON.stringify(data));
+      localStorage.setItem('stockenza_token', data.token);
+      localStorage.setItem('stockenza_user', JSON.stringify(data));
       setStep(1);
       setTimeout(() => router.push('/dashboard'), 900);
     } catch (err) {
@@ -147,7 +147,7 @@ export default function RegisterPage() {
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
               </div>
               <span style={{ fontSize:20, fontWeight:900, letterSpacing:'-0.02em', color:'white' }}>
-                Quanti<span style={{ color:'#818cf8' }}>vo</span>
+                Stock<span style={{ color:'#818cf8' }}>enza</span>
               </span>
             </div>
 
@@ -188,7 +188,7 @@ export default function RegisterPage() {
             </div>
 
             <p style={{ fontFamily:'DM Mono,monospace', fontSize:9, color:'rgba(255,255,255,0.1)', letterSpacing:'0.18em' }}>
-              QUANTIVO © 2025 — GDPR COMPLIANT
+              STOCKENZA © 2025 — GDPR COMPLIANT
             </p>
           </div>
         </div>
@@ -204,7 +204,7 @@ export default function RegisterPage() {
               <div style={{ width:36, height:36, borderRadius:12, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 18px rgba(99,102,241,0.5)' }}>
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
               </div>
-              <span style={{ fontSize:18, fontWeight:900, color:'white' }}>Quanti<span style={{ color:'#818cf8' }}>vo</span></span>
+              <span style={{ fontSize:18, fontWeight:900, color:'white' }}>Stock<span style={{ color:'#818cf8' }}>enza</span></span>
             </div>
 
             {/* Heading */}

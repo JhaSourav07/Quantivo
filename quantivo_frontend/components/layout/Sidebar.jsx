@@ -50,7 +50,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('quantivo_user');
+      const stored = localStorage.getItem('stockenza_user');
       if (stored) setUser(JSON.parse(stored));
     } catch {}
   }, []);
@@ -58,8 +58,8 @@ export default function Sidebar() {
   const handleLogout = () => {
     setLoggingOut(true);
     setTimeout(() => {
-      localStorage.removeItem('quantivo_token');
-      localStorage.removeItem('quantivo_user');
+      localStorage.removeItem('stockenza_token');
+      localStorage.removeItem('stockenza_user');
       router.push('/login');
     }, 400);
   };
@@ -80,7 +80,7 @@ export default function Sidebar() {
             </svg>
           </div>
           <span className="text-lg font-bold tracking-tight text-zinc-100">
-            Quanti<span className="text-indigo-400">vo</span>
+            Stock<span className="text-indigo-400">enza</span>
           </span>
         </div>
       </div>

@@ -14,18 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Quantivo — Business Intelligence for Modern Commerce",
+  title: "Stockenza — Business Intelligence for Modern Commerce",
   description:
     "Track inventory, manage orders, and analyze profit in real time. The operating system for your business.",
   keywords: ["inventory management", "business analytics", "profit tracking", "orders"],
   openGraph: {
-    title: "Quantivo",
+    title: "Stockenza",
     description: "The operating system for your business.",
     type: "website",
-  },
-  icons: {
-    icon: "/logo.png", // This points to app/logo.png
-    apple: "/logo.png", // For mobile users who bookmark your site
   },
 };
 

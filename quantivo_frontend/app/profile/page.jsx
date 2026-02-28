@@ -162,7 +162,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-zinc-300">Sign out of Quantivo</p>
+                    <p className="text-sm font-medium text-zinc-300">Sign out of Stockenza</p>
                     <p className="text-xs text-zinc-600 mt-0.5">You'll need to sign back in to access your dashboard</p>
                   </div>
                   <Button variant="danger" onClick={handleLogout}>

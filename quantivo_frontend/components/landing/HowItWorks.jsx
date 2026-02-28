@@ -28,7 +28,7 @@ const STEPS = [
   {
     num: '02',
     title: 'Record your sales',
-    body: 'Log orders as they come in. Quantivo automatically decrements your stock and calculates your profit per transaction in real time.',
+    body: 'Log orders as they come in. Stockenza automatically decrements your stock and calculates your profit per transaction in real time.',
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />

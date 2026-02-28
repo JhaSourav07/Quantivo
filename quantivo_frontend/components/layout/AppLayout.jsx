@@ -10,7 +10,7 @@ export default function AppLayout({ children }) {
 
   // ── Auth guard ──
   useEffect(() => {
-    const token = localStorage.getItem('quantivo_token');
+    const token = localStorage.getItem('stockenza_token');
     if (!token) {
       router.replace('/login');
     } else {

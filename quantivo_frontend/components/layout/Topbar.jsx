@@ -17,7 +17,7 @@ export default function Topbar() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('quantivo_user');
+      const stored = localStorage.getItem('stockenza_user');
       if (stored) setUser(JSON.parse(stored));
     } catch {}
 
@@ -30,7 +30,7 @@ export default function Topbar() {
     return () => clearInterval(id);
   }, []);
 
-  const meta = PAGE_META[pathname] || { title: 'Quantivo', subtitle: '' };
+  const meta = PAGE_META[pathname] || { title: 'Stockenza', subtitle: '' };
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U';

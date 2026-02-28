@@ -15,7 +15,7 @@ export default function LandingPage() {
       {/* 2. Full-screen hero */}
       <Hero />
 
-      {/* 3. What is Quantivo */}
+      {/* 3. What is Stockenza */}
       <About />
 
       {/* 4. How it works */}

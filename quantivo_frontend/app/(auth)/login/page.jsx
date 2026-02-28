@@ -121,8 +121,8 @@ export default function LoginPage() {
     e.preventDefault(); setLoading(true); setError('');
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      localStorage.setItem('quantivo_token', data.token);
-      localStorage.setItem('quantivo_user', JSON.stringify(data));
+      localStorage.setItem('stockenza_token', data.token);
+      localStorage.setItem('stockenza_user', JSON.stringify(data));
       router.push('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid credentials.');
@@ -159,7 +159,7 @@ export default function LoginPage() {
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
               </div>
               <span style={{ fontSize:20, fontWeight:900, letterSpacing:'-0.02em', color:'white' }}>
-                Quanti<span style={{ color:'#818cf8' }}>vo</span>
+                Stock<span style={{ color:'#818cf8' }}>enza</span>
               </span>
             </div>
 
@@ -187,7 +187,7 @@ export default function LoginPage() {
             </div>
 
             <p style={{ animation:'headIn 0.5s 0.95s both', fontFamily:'DM Mono,monospace', fontSize:9, color:'rgba(255,255,255,0.1)', letterSpacing:'0.18em' }}>
-              QUANTIVO © 2025 — ALL DATA ENCRYPTED AT REST
+              STOCKENZA © 2025 — ALL DATA ENCRYPTED AT REST
             </p>
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function LoginPage() {
               <div style={{ width:36, height:36, borderRadius:12, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 18px rgba(99,102,241,0.5)' }}>
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
               </div>
-              <span style={{ fontSize:18, fontWeight:900, color:'white' }}>Quanti<span style={{ color:'#818cf8' }}>vo</span></span>
+              <span style={{ fontSize:18, fontWeight:900, color:'white' }}>Stock<span style={{ color:'#818cf8' }}>enza</span></span>
             </div>
 
             <div style={{ marginBottom:32 }}>
@@ -234,7 +234,7 @@ export default function LoginPage() {
                     {loading ? (
                       <><span style={{ width:16, height:16, borderRadius:'50%', border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'white', display:'inline-block', animation:'spin 0.7s linear infinite' }} />Authenticating…</>
                     ) : (
-                      <>Sign In to Quantivo <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></>
+                      <>Sign In to Stockenza <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></>
                     )}
                   </span>
                 </button>

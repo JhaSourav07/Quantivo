@@ -63,7 +63,7 @@ export default function Contact() {
                     </svg>
                   ),
                   label: 'Email',
-                  value: 'hello@quantivo.io',
+                  value: 'stockenza.help@gmail.com',
                 },
                 {
                   icon: (

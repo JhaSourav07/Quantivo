@@ -50,7 +50,7 @@ app.get('/health', (req, res) =>
 
 // ── Root ──
 app.get('/', (req, res) =>
-  res.json({ message: 'Quantivo API is running.', version: '2.0.0' })
+  res.json({ message: 'Stockenza API is running.', version: '2.0.0' })
 );
 
 // ── 404 handler ──
@@ -77,7 +77,7 @@ app.use((err, req, res, next) => {
 // ── Start ──
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Quantivo API running on port ${PORT}`);
+  console.log(`🚀 Stockenza API running on port ${PORT}`);
   console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
   console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
 });
