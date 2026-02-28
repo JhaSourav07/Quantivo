@@ -23,6 +23,10 @@ export const metadata = {
     description: "The operating system for your business.",
     type: "website",
   },
+  icons: {
+    icon: "/logo.png", // This points to app/logo.png
+    apple: "/logo.png", // For mobile users who bookmark your site
+  },
 };
 
 export default function RootLayout({ children }) {

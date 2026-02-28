@@ -1,74 +1,72 @@
-const Order = require("../models/Order");
-const Inventory = require("../models/Inventory");
+const Order     = require('../models/Order');
+const Inventory = require('../models/Inventory');
 
-// @desc    Get total profit, revenue, and inventory value
-// @route   GET /api/reports/summary
+/**
+ * GET /api/reports/summary
+ * Returns total revenue, net profit, and inventory value
+ * scoped to the authenticated user's data only.
+ */
 const getSummaryStats = async (req, res) => {
   try {
-    // 1. Fetch all orders and bring in the product prices
-    const orders = await Order.find().populate(
-      "items.productId",
-      "costPrice sellingPrice",
-    );
+    const [orders, inventory] = await Promise.all([
+      Order.find({ createdBy: req.user._id })
+        .populate('items.productId', 'costPrice sellingPrice'),
+      Inventory.find({ createdBy: req.user._id }),
+    ]);
 
     let totalRevenue = 0;
-    let totalCost = 0;
+    let totalCost    = 0;
 
-    // 2. Calculate Revenue and Cost
     orders.forEach((order) => {
       totalRevenue += order.totalAmount;
 
       order.items.forEach((item) => {
-        // Check if the product still exists in the database
         if (item.productId) {
           totalCost += item.productId.costPrice * item.qty;
         }
       });
     });
 
-    const totalProfit = totalRevenue - totalCost;
-
-    // 3. Calculate current total value of items sitting in inventory
-    const inventory = await Inventory.find();
     const inventoryValue = inventory.reduce(
       (acc, item) => acc + item.costPrice * item.quantity,
-      0,
+      0
     );
 
-    res.status(200).json({
-      totalRevenue,
-      totalProfit,
-      inventoryValue,
+    return res.status(200).json({
+      totalRevenue:   Math.round(totalRevenue * 100) / 100,
+      totalProfit:    Math.round((totalRevenue - totalCost) * 100) / 100,
+      inventoryValue: Math.round(inventoryValue * 100) / 100,
     });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error('[getSummaryStats]', err.message);
+    return res.status(500).json({ message: 'Server error — could not generate summary.' });
   }
 };
 
-// @desc    Get chart data grouped by date for Recharts
-// @route   GET /api/reports/chart
+/**
+ * GET /api/reports/chart
+ * Returns daily revenue + profit grouped by date,
+ * scoped to the authenticated user's orders only.
+ */
 const getChartData = async (req, res) => {
   try {
-    const orders = await Order.find().populate(
-      "items.productId",
-      "costPrice sellingPrice",
-    );
+    const orders = await Order
+      .find({ createdBy: req.user._id })
+      .populate('items.productId', 'costPrice sellingPrice')
+      .sort({ createdAt: 1 });
 
-    // We will use an object to group data by date: { 'YYYY-MM-DD': { revenue: 100, profit: 50 } }
-    const groupedData = {};
+    // Group by YYYY-MM-DD
+    const grouped = {};
 
     orders.forEach((order) => {
-      // Format the date to YYYY-MM-DD
-      const date = order.createdAt.toISOString().split("T")[0];
+      const date = order.createdAt.toISOString().split('T')[0];
 
-      if (!groupedData[date]) {
-        groupedData[date] = { date, revenue: 0, profit: 0 };
+      if (!grouped[date]) {
+        grouped[date] = { date, revenue: 0, profit: 0 };
       }
 
-      // Add revenue
-      groupedData[date].revenue += order.totalAmount;
+      grouped[date].revenue += order.totalAmount;
 
-      // Calculate and add profit for this specific order
       let orderCost = 0;
       order.items.forEach((item) => {
         if (item.productId) {
@@ -76,17 +74,20 @@ const getChartData = async (req, res) => {
         }
       });
 
-      groupedData[date].profit += order.totalAmount - orderCost;
+      grouped[date].profit += order.totalAmount - orderCost;
     });
 
-    // Convert the object back into an array for Recharts and sort by date
-    const chartData = Object.values(groupedData).sort(
-      (a, b) => new Date(a.date) - new Date(b.date),
-    );
+    // Round values and return as sorted array
+    const chartData = Object.values(grouped).map((d) => ({
+      date:    d.date,
+      revenue: Math.round(d.revenue * 100) / 100,
+      profit:  Math.round(d.profit  * 100) / 100,
+    }));
 
-    res.status(200).json(chartData);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(200).json(chartData);
+  } catch (err) {
+    console.error('[getChartData]', err.message);
+    return res.status(500).json({ message: 'Server error — could not generate chart data.' });
   }
 };
 
