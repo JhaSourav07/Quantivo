@@ -49,6 +49,59 @@ function buildQs({ startDate, endDate }) {
   return `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
 }
 
+/**
+ * Transform raw daily chart data into the correct granularity.
+ *
+ * Problem: The backend always returns daily rows (one per YYYY-MM-DD).
+ * For short ranges (today / 7 days) we want day-level labels.
+ * For longer ranges (30 days / 1 year / all-time) we want MONTHLY labels —
+ * which means we must AGGREGATE the daily rows into monthly buckets first.
+ * Simply relabelling each daily row with a month name creates duplicate
+ * X-axis ticks and double-counts values in Recharts.
+ */
+function transformChartData(rawData, dateRange) {
+  const useDayLabel = dateRange === 'today' || dateRange === '7days';
+
+  if (useDayLabel) {
+    // Day-level — one point per row, label as "Mar 1"
+    return rawData.map((d) => {
+      const dt    = new Date(d.date);
+      const label = dt.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+      return { ...d, month: label };
+    });
+  }
+
+  // Month-level — aggregate daily rows into monthly buckets
+  const buckets = {}; // key: "Mar '26" → { month, revenue, profit }
+
+  rawData.forEach((d) => {
+    // Parse date as UTC to avoid timezone-induced day-shift
+    const dt    = new Date(d.date + 'T00:00:00Z');
+    const key   = dt.toLocaleString('en-US', {
+      month:    'short',
+      year:     '2-digit',
+      timeZone: 'UTC',
+    });
+
+    if (!buckets[key]) {
+      // Preserve insertion order by noting the sort key (year-month number)
+      const sortKey = dt.getUTCFullYear() * 100 + dt.getUTCMonth();
+      buckets[key]  = { month: key, revenue: 0, profit: 0, _sortKey: sortKey };
+    }
+
+    buckets[key].revenue += d.revenue;
+    buckets[key].profit  += d.profit;
+  });
+
+  return Object.values(buckets)
+    .sort((a, b) => a._sortKey - b._sortKey)
+    .map(({ _sortKey, ...rest }) => ({
+      ...rest,
+      revenue: Math.round(rest.revenue * 100) / 100,
+      profit:  Math.round(rest.profit  * 100) / 100,
+    }));
+}
+
 export default function DashboardPage() {
   const { fmt, isMounted } = useCurrency();
 
@@ -69,7 +122,7 @@ export default function DashboardPage() {
       const dates = getDateRange(dateRange);
       const qs    = buildQs(dates);
 
-      // All four requests fire in parallel; every date-sensitive one gets the same qs
+      // All four requests fire in parallel
       const [invRes, summaryRes, chartRes, pnlRes] = await Promise.all([
         api.get('/inventory'),                  // stock value + alerts (always all-time)
         api.get(`/reports/summary${qs}`),       // KPI cards
@@ -81,16 +134,8 @@ export default function DashboardPage() {
       setSummary(summaryRes.data);
       setPnlRows(pnlRes.data);
 
-      // Transform chart data: attach a human-readable `month` label for the XAxis
-      // Short ranges → day-level label ("Mar 1"), longer ranges → month-level ("Mar '26")
-      const useDayLabel = dateRange === 'today' || dateRange === '7days';
-      const mappedChart = chartRes.data.map((d) => {
-        const dt    = new Date(d.date);
-        const label = useDayLabel
-          ? dt.toLocaleString('en-US', { month: 'short', day: 'numeric' })
-          : dt.toLocaleString('en-US', { month: 'short', year: '2-digit' });
-        return { ...d, month: label };
-      });
+      // ── Transform chart data with correct aggregation ──
+      const mappedChart = transformChartData(chartRes.data, dateRange);
       setChartData(mappedChart);
 
     } catch (e) { console.error(e); }
@@ -114,6 +159,12 @@ export default function DashboardPage() {
   const animRevenue = useCountUp(totalRevenue, 1200, loaded);
   const animProfit  = useCountUp(totalProfit,  1200, loaded);
   const animStock   = useCountUp(stockValue,   1200, loaded);
+
+  // ── Chart subtitle — reflects current granularity ────────────────────────────
+  const chartSubtitle =
+    dateRange === 'today' || dateRange === '7days'
+      ? 'Daily performance breakdown'
+      : 'Monthly performance breakdown';
 
   return (
     <AppLayout>
@@ -194,7 +245,12 @@ export default function DashboardPage() {
         />
       </div>
 
-      <RevenueProfitChart loaded={loaded} chartData={chartData} fmt={fmt} />
+      <RevenueProfitChart
+        loaded={loaded}
+        chartData={chartData}
+        fmt={fmt}
+        subtitle={chartSubtitle}
+      />
 
       <PnLTable
         loaded={loaded}

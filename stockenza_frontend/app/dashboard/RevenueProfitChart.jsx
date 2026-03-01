@@ -17,17 +17,25 @@ function CustomTooltip({ active, payload, label, fmt }) {
   );
 }
 
-export default function RevenueProfitChart({ loaded, chartData, fmt }) {
+export default function RevenueProfitChart({ loaded, chartData, fmt, subtitle }) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-sm font-semibold text-zinc-200">Revenue & Profit</h2>
-          <p className="text-xs text-zinc-600 mt-0.5">Monthly performance breakdown</p>
+          <p className="text-xs text-zinc-600 mt-0.5">
+            {subtitle ?? 'Performance breakdown'}
+          </p>
         </div>
         <div className="flex items-center gap-4 text-xs text-zinc-500">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />Revenue</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Profit</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+            Revenue
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            Profit
+          </span>
         </div>
       </div>
 
@@ -42,20 +50,51 @@ export default function RevenueProfitChart({ loaded, chartData, fmt }) {
           <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="gradRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}    />
               </linearGradient>
               <linearGradient id="gradProfit" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0}    />
               </linearGradient>
             </defs>
+
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-            <XAxis dataKey="month" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(v)} width={70} />
+
+            <XAxis
+              dataKey="month"
+              tick={{ fill: '#71717a', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              // Prevent overcrowding on large datasets
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              tick={{ fill: '#71717a', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => fmt(v)}
+              width={70}
+            />
+
             <Tooltip content={<CustomTooltip fmt={fmt} />} />
-            <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={2} fill="url(#gradRevenue)" dot={false} />
-            <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} fill="url(#gradProfit)" dot={false} />
+
+            <Area
+              type="monotone"
+              dataKey="revenue"
+              stroke="#6366f1"
+              strokeWidth={2}
+              fill="url(#gradRevenue)"
+              dot={false}
+            />
+            <Area
+              type="monotone"
+              dataKey="profit"
+              stroke="#10b981"
+              strokeWidth={2}
+              fill="url(#gradProfit)"
+              dot={false}
+            />
           </AreaChart>
         </ResponsiveContainer>
       )}
