@@ -63,7 +63,22 @@ export default function InventoryTable({ items, filtered, loaded, isMounted, fmt
                     style={{ animation: `fadeIn 0.3s ${i * 35}ms both` }}
                   >
                     <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-zinc-200">{item.name}</p>
+                      <div className="flex items-center gap-3">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="w-8 h-8 rounded-md object-cover bg-zinc-800 border border-zinc-700 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-md bg-zinc-800 border border-zinc-700/50 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-4 h-4 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 18h18M3 12V6a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 6v12" />
+                            </svg>
+                          </div>
+                        )}
+                        <p className="text-sm font-medium text-zinc-200">{item.name}</p>
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <span className="text-xs font-mono text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">

@@ -26,8 +26,8 @@ app.use(cors({
 }));
 
 // ── Body parsing ──
-app.use(express.json({ limit: '10kb' }));       // prevent huge payloads
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ── Basic security headers ──
 app.use((req, res, next) => {

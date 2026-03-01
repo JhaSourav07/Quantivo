@@ -1,4 +1,22 @@
-const Inventory = require('../models/Inventory');
+const cloudinary = require('cloudinary').v2;
+const Inventory  = require('../models/Inventory');
+
+/* ── Cloudinary config ─────────────────────────────────────────── */
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+/* ── Helper: upload a Base64 data-URI to Cloudinary ───────────── */
+const uploadToCloudinary = async (base64String) => {
+  const result = await cloudinary.uploader.upload(base64String, {
+    folder:         'stockenza/inventory',
+    resource_type:  'image',
+    transformation: [{ width: 400, height: 400, crop: 'limit', quality: 'auto' }],
+  });
+  return result.secure_url;
+};
 
 /**
  * GET /api/inventory
@@ -7,7 +25,7 @@ const Inventory = require('../models/Inventory');
 const getItems = async (req, res) => {
   try {
     const items = await Inventory
-      .find({ createdBy: req.user._id })   // ← scoped to current user
+      .find({ createdBy: req.user._id })
       .sort({ createdAt: -1 });
 
     return res.status(200).json(items);
@@ -19,18 +37,31 @@ const getItems = async (req, res) => {
 
 /**
  * POST /api/inventory
- * Creates a new inventory item for the authenticated user.
+ * Creates a new inventory item. Optionally uploads an image to Cloudinary.
  */
 const createItem = async (req, res) => {
   try {
-    const { name, quantity, costPrice, sellingPrice, imageUrl } = req.body;
+    const { name, sku, category, quantity, costPrice, sellingPrice, image } = req.body;
+
+    // Upload image to Cloudinary if a Base64 string was provided
+    let imageUrl = '';
+    if (image) {
+      try {
+        imageUrl = await uploadToCloudinary(image);
+      } catch (uploadErr) {
+        console.error('[createItem] Cloudinary upload failed:', uploadErr.message);
+        return res.status(500).json({ message: 'Image upload failed. Please try again.' });
+      }
+    }
 
     const item = await Inventory.create({
       name:         name.trim(),
+      sku:          sku?.trim()      || '',
+      category:     category?.trim() || '',
       quantity:     Number(quantity),
       costPrice:    parseFloat(costPrice),
       sellingPrice: parseFloat(sellingPrice),
-      imageUrl:     imageUrl?.trim() || '',
+      imageUrl,
       createdBy:    req.user._id,
     });
 
@@ -44,6 +75,7 @@ const createItem = async (req, res) => {
 /**
  * PUT /api/inventory/:id
  * Updates an item — only if it belongs to the authenticated user.
+ * Optionally re-uploads a new image to Cloudinary.
  */
 const updateItem = async (req, res) => {
   try {
@@ -58,14 +90,25 @@ const updateItem = async (req, res) => {
       return res.status(403).json({ message: 'Not authorised to update this item.' });
     }
 
-    // Sanitise updateable fields
-    const allowed = ['name', 'quantity', 'costPrice', 'sellingPrice', 'imageUrl'];
+    const { name, sku, category, quantity, costPrice, sellingPrice, image } = req.body;
+
+    // Build the updates object — only include keys present in the request
     const updates = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        updates[key] = key === 'name' || key === 'imageUrl'
-          ? String(req.body[key]).trim()
-          : Number(req.body[key]);
+
+    if (name         !== undefined) updates.name         = String(name).trim();
+    if (sku          !== undefined) updates.sku          = String(sku).trim();
+    if (category     !== undefined) updates.category     = String(category).trim();
+    if (quantity     !== undefined) updates.quantity     = Number(quantity);
+    if (costPrice    !== undefined) updates.costPrice    = parseFloat(costPrice);
+    if (sellingPrice !== undefined) updates.sellingPrice = parseFloat(sellingPrice);
+
+    // Re-upload image only when a new Base64 string is sent
+    if (image) {
+      try {
+        updates.imageUrl = await uploadToCloudinary(image);
+      } catch (uploadErr) {
+        console.error('[updateItem] Cloudinary upload failed:', uploadErr.message);
+        return res.status(500).json({ message: 'Image upload failed. Please try again.' });
       }
     }
 
