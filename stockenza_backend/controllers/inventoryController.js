@@ -50,7 +50,7 @@ const createItem = async (req, res) => {
         imageUrl = await uploadToCloudinary(image);
       } catch (uploadErr) {
         console.error('[createItem] Cloudinary upload failed:', uploadErr.message);
-        return res.status(500).json({ message: 'Image upload failed. Please try again.' });
+        return res.status(500).json({ message: 'Image upload failed. Please try again.', error: uploadErr.message });
       }
     }
 
@@ -68,7 +68,7 @@ const createItem = async (req, res) => {
     return res.status(201).json(item);
   } catch (err) {
     console.error('[createItem]', err.message);
-    return res.status(500).json({ message: 'Server error — could not create item.' });
+    return res.status(500).json({ message: 'Server error — could not create item.', error: err.message });
   }
 };
 
@@ -108,7 +108,7 @@ const updateItem = async (req, res) => {
         updates.imageUrl = await uploadToCloudinary(image);
       } catch (uploadErr) {
         console.error('[updateItem] Cloudinary upload failed:', uploadErr.message);
-        return res.status(500).json({ message: 'Image upload failed. Please try again.' });
+        return res.status(500).json({ message: 'Image upload failed. Please try again.', error: uploadErr.message });
       }
     }
 

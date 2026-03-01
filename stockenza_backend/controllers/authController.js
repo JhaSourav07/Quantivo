@@ -396,6 +396,44 @@ const updateProfile = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, verifyEmail, forgotPassword, resendVerification, resetPassword, updateProfile };
+/**
+ * DELETE /api/auth/reset-data  (protected)
+ * Permanently deletes ALL Inventory and Order documents belonging to
+ * the authenticated user.  The User account itself is untouched.
+ */
+const resetBusinessData = async (req, res) => {
+  try {
+    const userId = req.user._id;
 
+    const Inventory = require('../models/Inventory');
+    const Order     = require('../models/Order');
 
+    // Delete both collections in parallel — fastest approach
+    const [invResult, ordResult] = await Promise.all([
+      Inventory.deleteMany({ createdBy: userId }),
+      Order.deleteMany({ createdBy: userId }),
+    ]);
+
+    return res.status(200).json({
+      message: 'All business data has been permanently deleted.',
+      deleted: {
+        inventory: invResult.deletedCount,
+        orders:    ordResult.deletedCount,
+      },
+    });
+  } catch (err) {
+    console.error('[resetBusinessData]', err.message);
+    return res.status(500).json({ message: 'Server error — could not reset business data.' });
+  }
+};
+
+module.exports = {
+  registerUser,
+  loginUser,
+  verifyEmail,
+  forgotPassword,
+  resendVerification,
+  resetPassword,
+  updateProfile,
+  resetBusinessData,
+};

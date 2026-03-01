@@ -88,6 +88,15 @@ export default function ProfilePage() {
     router.push('/login');
   };
 
+  const handleResetData = async () => {
+    try {
+      await api.delete('/auth/reset-data');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not reset business data. Please try again.');
+      throw err; // re-throw so DangerZone knows it failed
+    }
+  };
+
   const initials = user?.name
     ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U';
@@ -128,8 +137,10 @@ export default function ProfilePage() {
                 saved={currencySaved}
               />
               <ActiveSession user={user} />
-              <DangerZone onLogout={handleLogout} />
+              <DangerZone onLogout={handleLogout} onResetData={handleResetData} />
             </>
+          ) : activeSection === 'Security' ? (
+            <DangerZone onLogout={handleLogout} onResetData={handleResetData} />
           ) : (
             <PlaceholderSection activeSection={activeSection} sections={SECTIONS} />
           )}

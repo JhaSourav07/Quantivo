@@ -1,99 +1,157 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../../lib/api';
 import AppLayout from '../../components/layout/AppLayout';
 import { useCurrency } from '../../context/CurrencyContext';
 
-// Import our newly extracted components
 import { useCountUp } from '../../hooks/useCountUp';
 import MetricCard from '../../components/ui/MetricCard';
 import RevenueProfitChart from '../../app/dashboard/RevenueProfitChart';
 import PnLTable from '../../app/dashboard/PnLTable';
 
+// ── Date range pill options ────────────────────────────────────────────────────
+const DATE_RANGES = [
+  { label: 'Today',    value: 'today'    },
+  { label: '7 Days',   value: '7days'    },
+  { label: '30 Days',  value: '30days'   },
+  { label: '1 Year',   value: '1year'    },
+  { label: 'All Time', value: 'all-time' },
+];
+
+/**
+ * Converts a date-range key into { startDate, endDate } ISO strings.
+ * "Today" spans from 00:00:00.000 → 23:59:59.999 of the current day.
+ * "All Time" returns nulls so the backend omits the createdAt filter entirely.
+ */
+function getDateRange(range) {
+  if (range === 'all-time') return { startDate: null, endDate: null };
+
+  const end   = new Date();
+  const start = new Date();
+
+  if (range === 'today') {
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+  } else if (range === '7days') {
+    start.setDate(start.getDate() - 7);
+  } else if (range === '30days') {
+    start.setDate(start.getDate() - 30);
+  } else if (range === '1year') {
+    start.setFullYear(start.getFullYear() - 1);
+  }
+
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
+}
+
+/** Build a query-string from a { startDate, endDate } object. Returns '' for all-time. */
+function buildQs({ startDate, endDate }) {
+  if (!startDate || !endDate) return '';
+  return `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+}
+
 export default function DashboardPage() {
   const { fmt, isMounted } = useCurrency();
 
+  // ── Date range state ──────────────────────────────────────────────────────────
+  const [dateRange, setDateRange] = useState('30days');
+
+  // ── Data state ────────────────────────────────────────────────────────────────
   const [inventory, setInventory] = useState([]);
-  const [orders,    setOrders]    = useState([]);
+  const [summary,   setSummary]   = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [pnlRows,   setPnlRows]   = useState([]);
   const [loaded,    setLoaded]    = useState(false);
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [invRes, ordRes] = await Promise.all([
-          api.get('/inventory'),
-          api.get('/orders'),
-        ]);
-        setInventory(invRes.data);
-        setOrders(ordRes.data);
-      } catch (e) { console.error(e); }
-      finally     { setLoaded(true); }
-    };
-    fetchAll();
-  }, []);
+  // ── Fetch everything; re-runs whenever dateRange changes ──────────────────────
+  const fetchAll = useCallback(async () => {
+    setLoaded(false);
+    try {
+      const dates = getDateRange(dateRange);
+      const qs    = buildQs(dates);
 
-  // ── Derived metrics ──
-  const totalRevenue  = orders.reduce((s, o) => s + o.totalAmount, 0);
-  const totalCost     = orders.reduce((s, o) => {
-    return s + o.items.reduce((si, item) => {
-      const product = inventory.find((i) => i._id === (item.productId?._id || item.productId));
-      return si + (product ? product.costPrice * item.qty : 0);
-    }, 0);
-  }, 0);
-  const totalProfit   = totalRevenue - totalCost;
-  const stockValue    = inventory.reduce((s, i) => s + i.costPrice  * i.quantity, 0);
+      // All four requests fire in parallel; every date-sensitive one gets the same qs
+      const [invRes, summaryRes, chartRes, pnlRes] = await Promise.all([
+        api.get('/inventory'),                  // stock value + alerts (always all-time)
+        api.get(`/reports/summary${qs}`),       // KPI cards
+        api.get(`/reports/chart${qs}`),         // chart
+        api.get(`/reports/pnl${qs}`),           // P&L table — server-side date filter
+      ]);
+
+      setInventory(invRes.data);
+      setSummary(summaryRes.data);
+      setPnlRows(pnlRes.data);
+
+      // Transform chart data: attach a human-readable `month` label for the XAxis
+      // Short ranges → day-level label ("Mar 1"), longer ranges → month-level ("Mar '26")
+      const useDayLabel = dateRange === 'today' || dateRange === '7days';
+      const mappedChart = chartRes.data.map((d) => {
+        const dt    = new Date(d.date);
+        const label = useDayLabel
+          ? dt.toLocaleString('en-US', { month: 'short', day: 'numeric' })
+          : dt.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+        return { ...d, month: label };
+      });
+      setChartData(mappedChart);
+
+    } catch (e) { console.error(e); }
+    finally     { setLoaded(true); }
+  }, [dateRange]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ── Derived display values ────────────────────────────────────────────────────
+  const totalRevenue = summary?.totalRevenue  ?? 0;
+  const totalProfit  = summary?.totalProfit   ?? 0;
+  const stockValue   = summary?.inventoryValue ?? 0;
+  const orderCount   = summary?.orderCount    ?? 0;
+  const totalCost    = pnlRows.reduce((s, r) => s + r.cost, 0);
+
+  // Alerts are always all-time — operational stock level, not a time-series metric
   const lowStockItems = inventory.filter((i) => i.quantity > 0 && i.quantity <= 5);
   const outOfStock    = inventory.filter((i) => i.quantity === 0);
 
-  // ── Chart data ──
-  const chartData = (() => {
-    const map = {};
-    orders.forEach((order) => {
-      const key   = new Date(order.createdAt).toLocaleString('en-US', { month: 'short', year: '2-digit' });
-      const cost  = order.items.reduce((s, item) => {
-        const product = inventory.find((i) => i._id === (item.productId?._id || item.productId));
-        return s + (product ? product.costPrice * item.qty : 0);
-      }, 0);
-      if (!map[key]) map[key] = { month: key, revenue: 0, profit: 0 };
-      map[key].revenue += order.totalAmount;
-      map[key].profit  += order.totalAmount - cost;
-    });
-    return Object.values(map).slice(-6);
-  })();
-
-  // ── P&L per product ──
-  const pnlRows = inventory.map((item) => {
-    const itemOrders = orders.filter((o) =>
-      o.items.some((i) => (i.productId?._id || i.productId) === item._id)
-    );
-    const unitsSold = itemOrders.reduce((s, o) =>
-      s + o.items.filter((i) => (i.productId?._id || i.productId) === item._id)
-              .reduce((si, i) => si + i.qty, 0), 0);
-    const revenue = unitsSold * item.sellingPrice;
-    const cost    = unitsSold * item.costPrice;
-    const profit  = revenue - cost;
-    const margin  = revenue > 0 ? (profit / revenue) * 100 : 0;
-    return { ...item, unitsSold, revenue, cost, profit, margin };
-  }).sort((a, b) => b.revenue - a.revenue);
-
-  // Animated totals
+  // Animated count-up for the three monetary KPI cards
   const animRevenue = useCountUp(totalRevenue, 1200, loaded);
   const animProfit  = useCountUp(totalProfit,  1200, loaded);
   const animStock   = useCountUp(stockValue,   1200, loaded);
 
   return (
     <AppLayout>
-      <div className="mb-8 flex items-center justify-between">
+      {/* ── Header ── */}
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Dashboard</h1>
-          <p className="text-sm text-zinc-600 mt-0.5">Business overview & analytics</p>
+          <p className="text-sm text-zinc-600 mt-0.5">Business overview &amp; analytics</p>
         </div>
-        {isMounted && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-500">
-            <span>Showing in</span>
-            <span className="font-semibold text-zinc-300">{fmt(0).replace(/[\d,.\s]/g, '').trim() || '…'}</span>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* ── Date Range Pill Selector ── */}
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-900 border border-zinc-800">
+            {DATE_RANGES.map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => setDateRange(value)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
+                  dateRange === value
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        )}
+
+          {/* Currency badge */}
+          {isMounted && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-500">
+              <span>Currency</span>
+              <span className="font-semibold text-zinc-300">
+                {fmt(0).replace(/[\d,.\s]/g, '').trim() || '…'}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── KPI cards ── */}
@@ -101,7 +159,7 @@ export default function DashboardPage() {
         <MetricCard
           label="Total revenue"
           value={isMounted ? fmt(animRevenue) : '—'}
-          sub={`${orders.length} orders total`}
+          sub={`${orderCount} orders`}
           color="text-indigo-400"
           delay={0}
           loaded={loaded && isMounted}
@@ -137,15 +195,15 @@ export default function DashboardPage() {
       </div>
 
       <RevenueProfitChart loaded={loaded} chartData={chartData} fmt={fmt} />
-      
-      <PnLTable 
-        loaded={loaded} 
-        pnlRows={pnlRows} 
-        isMounted={isMounted} 
-        fmt={fmt} 
-        totalRevenue={totalRevenue} 
-        totalCost={totalCost} 
-        totalProfit={totalProfit} 
+
+      <PnLTable
+        loaded={loaded}
+        pnlRows={pnlRows}
+        isMounted={isMounted}
+        fmt={fmt}
+        totalRevenue={totalRevenue}
+        totalCost={totalCost}
+        totalProfit={totalProfit}
       />
     </AppLayout>
   );

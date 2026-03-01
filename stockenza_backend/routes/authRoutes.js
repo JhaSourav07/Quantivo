@@ -9,6 +9,7 @@ const {
   resendVerification,
   resetPassword,
   updateProfile,
+  resetBusinessData,
 } = require('../controllers/authController');
 
 router.post('/register',             registerUser);
@@ -18,5 +19,6 @@ router.post('/forgot-password',      forgotPassword);
 router.post('/resend-verification',  resendVerification);
 router.post('/reset-password',       resetPassword);
 router.put ('/profile',   protect,   updateProfile);
+router.delete('/reset-data', protect, resetBusinessData);
 
 module.exports = router;

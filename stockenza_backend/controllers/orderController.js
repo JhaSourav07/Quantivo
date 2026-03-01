@@ -93,13 +93,25 @@ const createOrder = async (req, res) => {
 };
 
 /**
- * GET /api/orders
- * Returns all orders created by the authenticated user.
+ * GET /api/orders?startDate=&endDate=
+ * Returns orders created by the authenticated user.
+ * Optionally filters by a createdAt date range when startDate / endDate
+ * ISO strings are provided as query parameters.
  */
 const getOrders = async (req, res) => {
   try {
+    const { startDate, endDate } = req.query;
+
+    // Build optional date-range filter (same pattern as reportController)
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.createdAt = {};
+      if (startDate) dateFilter.createdAt.$gte = new Date(startDate);
+      if (endDate)   dateFilter.createdAt.$lte = new Date(endDate);
+    }
+
     const orders = await Order
-      .find({ createdBy: req.user._id })
+      .find({ createdBy: req.user._id, ...dateFilter })
       .sort({ createdAt: -1 })
       .populate('items.productId', 'name costPrice sellingPrice');
 
