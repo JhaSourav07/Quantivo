@@ -1,12 +1,50 @@
 import Badge from '../../components/ui/Badge';
 import Skeleton from '../../components/ui/Skeleton';
 
-export default function InventoryTable({ items, filtered, loaded, isMounted, fmt, openEdit, handleDelete, deleteId }) {
+/** Small sort indicator shown inside clickable header cells */
+function SortIcon({ columnKey, sortConfig }) {
+  if (sortConfig.key !== columnKey) {
+    // Inactive: show a neutral double-arrow
+    return (
+      <svg className="inline-block ml-1 w-3 h-3 text-zinc-700" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M5 6l3-3 3 3H5zm6 4l-3 3-3-3h6z" />
+      </svg>
+    );
+  }
+  return sortConfig.direction === 'asc' ? (
+    <svg className="inline-block ml-1 w-3 h-3 text-indigo-400" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 4l4 6H4l4-6z" />
+    </svg>
+  ) : (
+    <svg className="inline-block ml-1 w-3 h-3 text-indigo-400" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 12L4 6h8l-4 6z" />
+    </svg>
+  );
+}
+
+export default function InventoryTable({
+  items, filtered, loaded, isMounted, fmt,
+  openEdit, handleDelete, deleteId,
+  sortConfig, onSort,
+}) {
   const stockStatus = (qty) => {
     if (qty === 0) return { label: 'Out of stock', cls: 'bg-red-500/10 text-red-400 border-red-500/20' };
     if (qty <= 5)  return { label: 'Low stock',    cls: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
     return              { label: 'In stock',       cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
   };
+
+  // Config for each header column: label, sort key (null = not sortable), alignment
+  const headers = [
+    { label: 'Product',  sortKey: 'name',         align: 'left'   },
+    { label: 'SKU',      sortKey: null,            align: 'left'   },
+    { label: 'Category', sortKey: null,            align: 'left'   },
+    { label: 'Cost',     sortKey: null,            align: 'right'  },
+    { label: 'Price',    sortKey: 'sellingPrice',  align: 'right'  },
+    { label: 'Margin',   sortKey: null,            align: 'right'  },
+    { label: 'Stock',    sortKey: 'quantity',      align: 'center' },
+    { label: 'Status',   sortKey: null,            align: 'left'   },
+    { label: '',         sortKey: null,            align: ''       },
+  ];
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -22,18 +60,32 @@ export default function InventoryTable({ items, filtered, loaded, isMounted, fmt
         <table className="w-full">
           <thead>
             <tr className="border-b border-zinc-800/60">
-              {['Product', 'SKU', 'Category', 'Cost', 'Price', 'Margin', 'Stock', 'Status', ''].map((h, i) => (
-                <th
-                  key={h + i}
-                  className={`px-5 py-3 text-xs font-medium text-zinc-600 uppercase tracking-wider whitespace-nowrap ${
-                    ['Cost','Price','Margin'].includes(h) ? 'text-right' :
-                    h === 'Stock' ? 'text-center' :
-                    h === '' ? '' : 'text-left'
-                  }`}
-                >
-                  {h}
-                </th>
-              ))}
+              {headers.map(({ label, sortKey, align }, i) => {
+                const isSortable = !!sortKey;
+                const isActive   = sortConfig.key === sortKey;
+                const alignClass =
+                  align === 'right'  ? 'text-right'  :
+                  align === 'center' ? 'text-center' :
+                  align === 'left'   ? 'text-left'   : '';
+
+                return (
+                  <th
+                    key={label + i}
+                    className={`px-5 py-3 text-xs font-medium uppercase tracking-wider whitespace-nowrap ${alignClass} ${
+                      isSortable
+                        ? 'text-zinc-500 cursor-pointer select-none hover:text-zinc-300 transition-colors'
+                        : 'text-zinc-600'
+                    } ${isActive ? 'text-indigo-400' : ''}`}
+                    onClick={isSortable ? () => onSort(sortKey) : undefined}
+                    title={isSortable ? `Sort by ${label}` : undefined}
+                  >
+                    {label}
+                    {isSortable && (
+                      <SortIcon columnKey={sortKey} sortConfig={sortConfig} />
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/40">
@@ -48,7 +100,7 @@ export default function InventoryTable({ items, filtered, loaded, isMounted, fmt
                     <svg className="w-8 h-8 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
-                    <p className="text-sm">{items.length === 0 ? 'No products yet — add your first one' : 'No products match your search'}</p>
+                    <p className="text-sm">{items.length === 0 ? 'No products yet — add your first one' : 'No products match your filters'}</p>
                   </div>
                 </td>
               </tr>

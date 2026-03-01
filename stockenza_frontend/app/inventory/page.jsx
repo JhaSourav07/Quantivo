@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../lib/api';
 import AppLayout from '../../components/layout/AppLayout';
 import Button from '../../components/ui/Button';
@@ -20,15 +20,22 @@ export default function InventoryPage() {
 
   const [items,        setItems]        = useState([]);
   const [loaded,       setLoaded]       = useState(false);
-  const [search,       setSearch]       = useState('');
+
+  // ── Filter & Sort State ──────────────────────────────────────────────────────
+  const [searchQuery,       setSearchQuery]       = useState('');
+  const [selectedCategory,  setSelectedCategory]  = useState('All');
+  const [showLowStock,      setShowLowStock]      = useState(false);
+  const [sortConfig,        setSortConfig]        = useState({ key: null, direction: 'asc' });
+
+  // ── Modal / CRUD State ───────────────────────────────────────────────────────
   const [modalOpen,    setModalOpen]    = useState(false);
   const [editItem,     setEditItem]     = useState(null);
   const [form,         setForm]         = useState(EMPTY_FORM);
   const [saving,       setSaving]       = useState(false);
   const [deleteId,     setDeleteId]     = useState(null);
   // Image state
-  const [imageBase64,  setImageBase64]  = useState('');   // sent to backend
-  const [imagePreview, setImagePreview] = useState('');   // shown in modal
+  const [imageBase64,  setImageBase64]  = useState('');
+  const [imagePreview, setImagePreview] = useState('');
 
   const fetchItems = useCallback(async () => {
     try {
@@ -40,6 +47,62 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  // ── Derived: unique categories for dropdown ──────────────────────────────────
+  const categories = useMemo(() => {
+    const cats = new Set(items.map((i) => i.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [items]);
+
+  // ── Derived: filtered + sorted rows ─────────────────────────────────────────
+  const filteredAndSortedItems = useMemo(() => {
+    let result = [...items];
+
+    // 1. Text search on name and sku
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          (item.sku || '').toLowerCase().includes(q)
+      );
+    }
+
+    // 2. Category filter
+    if (selectedCategory && selectedCategory !== 'All') {
+      result = result.filter((item) => item.category === selectedCategory);
+    }
+
+    // 3. Low stock filter
+    if (showLowStock) {
+      result = result.filter((item) => item.quantity < 10);
+    }
+
+    // 4. Sort
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        const aVal = a[sortConfig.key] ?? '';
+        const bVal = b[sortConfig.key] ?? '';
+        if (typeof aVal === 'string') {
+          return sortConfig.direction === 'asc'
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal);
+        }
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+    }
+
+    return result;
+  }, [items, searchQuery, selectedCategory, showLowStock, sortConfig]);
+
+  // ── Sort handler ─────────────────────────────────────────────────────────────
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  // ── Image helpers ────────────────────────────────────────────────────────────
   const resetImageState = () => {
     setImageBase64('');
     setImagePreview('');
@@ -62,21 +125,18 @@ export default function InventoryPage() {
       quantity:     item.quantity,
       category:     item.category     || '',
     });
-    // Pre-populate preview with existing Cloudinary URL (no new upload unless replaced)
     setImageBase64('');
     setImagePreview(item.imageUrl || '');
     setModalOpen(true);
   };
 
-  /** Convert the chosen file to Base64 via FileReader */
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onloadend = () => {
-      setImageBase64(reader.result);   // full data-URI, e.g. "data:image/png;base64,..."
-      setImagePreview(reader.result);  // also use as preview
+      setImageBase64(reader.result);
+      setImagePreview(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -92,7 +152,6 @@ export default function InventoryPage() {
         sellingPrice: Number(form.sellingPrice),
         quantity:     Number(form.quantity),
         category:     form.category,
-        // Only send the base64 string when the user actually picked a new image
         ...(imageBase64 ? { image: imageBase64 } : {}),
       };
 
@@ -125,12 +184,6 @@ export default function InventoryPage() {
     }
   };
 
-  const filtered = items.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase()) ||
-    (item.sku      || '').toLowerCase().includes(search.toLowerCase()) ||
-    (item.category || '').toLowerCase().includes(search.toLowerCase())
-  );
-
   return (
     <AppLayout>
       {/* ── Header ── */}
@@ -147,17 +200,29 @@ export default function InventoryPage() {
         </Button>
       </div>
 
-      <InventoryStats  items={items} loaded={loaded} isMounted={isMounted} fmt={fmt} />
-      <InventorySearch search={search} setSearch={setSearch} />
+      <InventoryStats items={items} loaded={loaded} isMounted={isMounted} fmt={fmt} />
+
+      <InventorySearch
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        showLowStock={showLowStock}
+        setShowLowStock={setShowLowStock}
+        categories={categories}
+      />
+
       <InventoryTable
         items={items}
-        filtered={filtered}
+        filtered={filteredAndSortedItems}
         loaded={loaded}
         isMounted={isMounted}
         fmt={fmt}
         openEdit={openEdit}
         handleDelete={handleDelete}
         deleteId={deleteId}
+        sortConfig={sortConfig}
+        onSort={handleSort}
       />
 
       <InventoryModal
